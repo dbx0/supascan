@@ -1,0 +1,21 @@
+[project]
+name = "supascan"
+version = "1.0.0"
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.1",
+    "rich>=13.0",
+    "requests>=2.31",
+    "PyJWT>=2.8",
+    "beautifulsoup4>=4.12",
+]
+
+[project.scripts]
+supascan = "supascan.cli:cli"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/supascan"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
