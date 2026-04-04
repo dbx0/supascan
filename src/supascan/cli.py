@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 import click
+import requests
 from rich.console import Console
 from rich.table import Table as RichTable
 from rich.text import Text
@@ -546,7 +547,12 @@ def run_all(ctx, target, write, skip_signup, output):
 
     # Step 2: enumerate
     console.print("[bold]Step 2: Enumerating resources...[/bold]")
-    tables = enumerate_tables(client)
+    try:
+        tables = enumerate_tables(client)
+    except requests.exceptions.ConnectionError:
+        console.print(f"[red]Connection failed: could not resolve {creds.base_url}[/red]")
+        console.print("[yellow]The Supabase project may be deleted, paused, or using a custom domain.[/yellow]")
+        sys.exit(1)
     rpcs = enumerate_rpc_functions(client)
     buckets = enumerate_buckets(client)
 

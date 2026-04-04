@@ -73,7 +73,10 @@ def enumerate_tables(client: SupabaseClient) -> list[TableInfo]:
 
 
 def enumerate_rpc_functions(client: SupabaseClient) -> list[RPCFunction]:
-    resp = client.get_openapi_spec()
+    try:
+        resp = client.get_openapi_spec()
+    except Exception:
+        return []
     if resp.status_code != 200:
         return []
 
@@ -116,7 +119,10 @@ def enumerate_rpc_functions(client: SupabaseClient) -> list[RPCFunction]:
 
 
 def enumerate_buckets(client: SupabaseClient) -> list[StorageBucket]:
-    resp = client.list_buckets()
+    try:
+        resp = client.list_buckets()
+    except Exception:
+        return []
     if resp.status_code != 200:
         return []
 

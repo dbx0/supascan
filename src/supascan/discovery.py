@@ -24,6 +24,13 @@ _RE_TUPLE = re.compile(
     r'\s*,\s*[\'"]([^\'"]+)[\'"]'
     r'\s*\)'
 )
+# Matches url+key as consecutive args without requiring closing paren —
+# catches minified calls with a third options argument, e.g. Ps('url', 'key', {...})
+_RE_URL_KEY_PAIR = re.compile(
+    r'[\'"]https://([a-z0-9]{20})\.supabase\.co[\'"]'
+    r'\s*,\s*[\'"]([^\'"]{50,})[\'"]',
+    re.DOTALL,
+)
 
 
 def is_valid_supabase_anon_key(token: str) -> bool:
@@ -31,6 +38,16 @@ def is_valid_supabase_anon_key(token: str) -> bool:
         import jwt
         payload = jwt.decode(token, options={"verify_signature": False})
         return payload.get("role") == "anon"
+    except Exception:
+        return False
+
+
+def is_valid_supabase_key(token: str) -> bool:
+    """Accept both anon and service_role Supabase JWTs."""
+    try:
+        import jwt
+        payload = jwt.decode(token, options={"verify_signature": False})
+        return payload.get("role") in ("anon", "service_role")
     except Exception:
         return False
 
@@ -52,6 +69,15 @@ def _extract_credentials(content: str, source: str) -> Optional[Credentials]:
             project_ref = m.group(1)
             anon_key = m.group(2)
 
+    # Minified call with options arg: Ps('https://ref.supabase.co', 'eyJ...', {...})
+    if not (project_ref and anon_key):
+        m = _RE_URL_KEY_PAIR.search(content)
+        if m:
+            candidate = m.group(2)
+            if _RE_JWT.match(candidate) and is_valid_supabase_key(candidate):
+                project_ref = m.group(1)
+                anon_key = candidate
+
     # Fall back to ref from URL
     if not project_ref:
         m = _RE_PROJECT_REF.search(content)
@@ -68,10 +94,10 @@ def _extract_credentials(content: str, source: str) -> Optional[Credentials]:
                     anon_key = candidate
                     break
 
-    # Last resort: any JWT that looks like an anon key
+    # Last resort: any JWT that looks like a Supabase key (anon or service_role)
     if not anon_key:
         for token in _RE_JWT.findall(content):
-            if is_valid_supabase_anon_key(token):
+            if is_valid_supabase_key(token):
                 anon_key = token
                 break
 
