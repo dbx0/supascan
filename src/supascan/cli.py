@@ -302,7 +302,13 @@ def enum(ctx, tables, rpc, buckets):
 def query(ctx, table, limit, fmt, anon):
     """Query a specific table."""
     client = _get_client(ctx)
-    resp = client.query_table(table, limit=limit, csv=(fmt == "csv"), anon=anon)
+    try:
+        resp = client.query_table(table, limit=limit, csv=(fmt == "csv"), anon=anon)
+    except requests.exceptions.ConnectionError:
+        creds = ctx.obj["creds"]
+        console.print(f"[red]Connection failed: could not resolve {creds.base_url}[/red]")
+        console.print("[yellow]The Supabase project may be deleted, paused, or using a custom domain.[/yellow]")
+        sys.exit(1)
     if resp.status_code == 200:
         if fmt == "csv":
             click.echo(resp.text)
@@ -329,12 +335,22 @@ def dump(ctx, table_names, out_dir):
 
     if not table_names:
         console.print("[bold]Discovering tables...[/bold]")
-        tables = enumerate_tables(client)
+        try:
+            tables = enumerate_tables(client)
+        except requests.exceptions.ConnectionError:
+            creds = ctx.obj["creds"]
+            console.print(f"[red]Connection failed: could not resolve {creds.base_url}[/red]")
+            console.print("[yellow]The Supabase project may be deleted, paused, or using a custom domain.[/yellow]")
+            sys.exit(1)
         table_names = [t.name for t in tables if t.accessible]
 
     for name in table_names:
         console.print(f"  Dumping {name}...")
-        resp = client.query_table(name, limit=10000)
+        try:
+            resp = client.query_table(name, limit=10000)
+        except requests.exceptions.ConnectionError:
+            console.print(f"  [red]Connection lost while dumping {name}[/red]")
+            sys.exit(1)
         if resp.status_code == 200:
             dest = out / f"{name}.json"
             dest.write_text(json.dumps(resp.json(), indent=2))
