@@ -80,6 +80,8 @@ Discovered credentials are saved to `~/.supascan/cache.json` automatically.
 
 ```bash
 supascan -p <project_ref> -k <anon_key> enum
+# or, if credentials are cached:
+supascan -p <project_ref> enum
 ```
 
 Options:
@@ -159,6 +161,14 @@ supascan check-jwt eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 supascan cached list
 supascan cached remove <project_ref>
 supascan cached clear
+```
+
+Discovered credentials are saved automatically. Once cached, you can omit `-k` and pass only `-p`:
+
+```bash
+supascan -p <project_ref> enum
+supascan -p <project_ref> query users
+supascan -p <project_ref> test -o findings.json
 ```
 
 ---

@@ -102,6 +102,12 @@ def _get_client(ctx: click.Context, require_creds: bool = True) -> Optional[Supa
     anon_key = ctx.obj.get("anon_key")
     verbose = ctx.obj.get("verbose", False)
 
+    if project_ref and not anon_key:
+        cached = cache_mod.get_credentials(project_ref)
+        if cached:
+            anon_key = cached.anon_key
+            console.print(f"[dim]Using cached anon key for {project_ref}[/dim]")
+
     if not project_ref or not anon_key:
         if require_creds:
             console.print("[red]Error: --project-ref and --anon-key are required.[/red]")
@@ -519,6 +525,12 @@ def run_all(ctx, target, write, skip_signup, output):
     # Step 1: credentials
     project_ref = ctx.obj.get("project_ref")
     anon_key = ctx.obj.get("anon_key")
+
+    if project_ref and not anon_key:
+        cached = cache_mod.get_credentials(project_ref)
+        if cached:
+            anon_key = cached.anon_key
+            console.print(f"[dim]Using cached anon key for {project_ref}[/dim]")
 
     if not (project_ref and anon_key):
         console.print(f"[bold]Step 1: Discovering credentials from {target}[/bold]")
