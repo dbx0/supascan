@@ -11,6 +11,8 @@ from .models import Credentials
 
 _RE_PROJECT_REF = re.compile(r'https://([a-z0-9]{20})\.supabase\.co')
 _RE_JWT = re.compile(r'eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+')
+# New Supabase publishable key format (non-JWT)
+_RE_SB_PUBLISHABLE = re.compile(r'sb_publishable_[A-Za-z0-9_-]+')
 _RE_CREATE_CLIENT = re.compile(
     r'createClient\s*\(\s*[\'"]https://([a-z0-9]{20})\.supabase\.co[\'"]'
     r'\s*,\s*[\'"]([^\'"]+)[\'"]'
@@ -18,7 +20,7 @@ _RE_CREATE_CLIENT = re.compile(
 _RE_SUPABASE_KEY = re.compile(r'SUPABASE_(?:ANON_)?KEY\s*[=:]\s*[\'"]([^\'"]+)[\'"]')
 _RE_ANON_KEY = re.compile(r'anon[_-]?key[\'"]?\s*[=:]\s*[\'"]([^\'"]+)[\'"]')
 _RE_EDGE_FN = re.compile(r'functions\.invoke\s*\(\s*[\'"]([^\'"]+)[\'"]')
-# Tuple format: ('https://ref.supabase.co', 'eyJ...')
+# Tuple format: ('https://ref.supabase.co', 'eyJ...' or 'sb_publishable_...')
 _RE_TUPLE = re.compile(
     r'\(\s*[\'"]https://([a-z0-9]{20})\.supabase\.co[\'"]'
     r'\s*,\s*[\'"]([^\'"]+)[\'"]'
@@ -28,12 +30,14 @@ _RE_TUPLE = re.compile(
 # catches minified calls with a third options argument, e.g. Ps('url', 'key', {...})
 _RE_URL_KEY_PAIR = re.compile(
     r'[\'"]https://([a-z0-9]{20})\.supabase\.co[\'"]'
-    r'\s*,\s*[\'"]([^\'"]{50,})[\'"]',
+    r'\s*,\s*[\'"]([^\'"]{30,})[\'"]',
     re.DOTALL,
 )
 
 
 def is_valid_supabase_anon_key(token: str) -> bool:
+    if _RE_SB_PUBLISHABLE.fullmatch(token):
+        return True
     try:
         import jwt
         payload = jwt.decode(token, options={"verify_signature": False})
@@ -43,7 +47,9 @@ def is_valid_supabase_anon_key(token: str) -> bool:
 
 
 def is_valid_supabase_key(token: str) -> bool:
-    """Accept both anon and service_role Supabase JWTs."""
+    """Accept both anon and service_role Supabase JWTs, and new sb_publishable_ format."""
+    if _RE_SB_PUBLISHABLE.fullmatch(token):
+        return True
     try:
         import jwt
         payload = jwt.decode(token, options={"verify_signature": False})
@@ -74,7 +80,7 @@ def _extract_credentials(content: str, source: str) -> Optional[Credentials]:
         m = _RE_URL_KEY_PAIR.search(content)
         if m:
             candidate = m.group(2)
-            if _RE_JWT.match(candidate) and is_valid_supabase_key(candidate):
+            if is_valid_supabase_key(candidate):
                 project_ref = m.group(1)
                 anon_key = candidate
 
@@ -90,16 +96,20 @@ def _extract_credentials(content: str, source: str) -> Optional[Credentials]:
             m = pattern.search(content, re.IGNORECASE)
             if m:
                 candidate = m.group(1)
-                if _RE_JWT.match(candidate):
+                if _RE_JWT.match(candidate) or _RE_SB_PUBLISHABLE.fullmatch(candidate):
                     anon_key = candidate
                     break
 
-    # Last resort: any JWT that looks like a Supabase key (anon or service_role)
+    # Last resort: any JWT or sb_publishable_ key that looks like a Supabase key
     if not anon_key:
         for token in _RE_JWT.findall(content):
             if is_valid_supabase_key(token):
                 anon_key = token
                 break
+    if not anon_key:
+        for token in _RE_SB_PUBLISHABLE.findall(content):
+            anon_key = token
+            break
 
     if project_ref and anon_key:
         return Credentials(project_ref=project_ref, anon_key=anon_key, source=source)
